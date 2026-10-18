@@ -71,6 +71,31 @@ h1 { font-size: 22px; margin: 0 0 12px; letter-spacing: -.4px; }
   border-radius: 4px;
   pointer-events: none;
 }
+.sq.last { box-shadow: inset 0 0 0 100px rgba(243,201,105,.22); }
+.sq.sel { box-shadow: inset 0 0 0 100px rgba(243,201,105,.45); }
+.sq.tg::before {
+  content: "";
+  position: absolute;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: rgba(86,214,194,.75);
+  pointer-events: none;
+  z-index: 2;
+}
+.sq.tgc::before {
+  content: "";
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  border: 5px solid rgba(86,214,194,.75);
+  pointer-events: none;
+  z-index: 2;
+}
+.sq .pc { width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block; }
+.pal button .pc { width: 30px; height: 30px; display: block; }
+.lp { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; flex: none; }
+.lp .pc { width: 100%; height: 100%; }
 .pw { color: #f8fbff; text-shadow: 0 0 2px #17202c, 0 0 2px #17202c; }
 .pb { color: #17202c; text-shadow: 0 0 1px #e5f0fa; }
 .coord {
@@ -80,6 +105,8 @@ h1 { font-size: 22px; margin: 0 0 12px; letter-spacing: -.4px; }
   font-size: 9px;
   color: var(--mut);
   opacity: .9;
+  z-index: 1;
+  pointer-events: none;
 }
 .pal { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
 .pal button, .btn {
@@ -103,6 +130,8 @@ h1 { font-size: 22px; margin: 0 0 12px; letter-spacing: -.4px; }
 }
 #helpBtn { background: #1c3c43; border-color: #2c625f; }
 #helpBtn:hover { background: #26504f; }
+#play { background: #1c3c43; border-color: #2c625f; }
+#play:hover { background: #26504f; }
 .card {
   background: var(--card);
   border: 1px solid var(--ln);
@@ -143,10 +172,12 @@ textarea { height: 80px; resize: vertical; }
   padding: 5px 7px;
   cursor: pointer;
   border-radius: 6px;
+  align-items: center;
 }
 .list div:hover, .list div.on { background: #2b394d; }
 .list .n { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ac); }
 .mut { color: var(--mut); font-size: 12px; }
+#status { font-weight: 600; color: var(--ac); }
 svg { width: 100%; height: auto; display: block; }
 .help { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
 .fig .mini { max-width: 230px; margin: 0 auto 6px; border: 1px solid var(--ln); border-radius: 5px; }
@@ -172,18 +203,22 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--ac); }
 <div id="help" class="card" hidden>
   <p style="margin-top:0"><b>Attack</b> measures how hard each side pushes into the other’s half of the board. <b>Tension</b> is high only when <i>both</i> sides are pushing, so a one-sided mate scores 0.</p>
   <div class="help" id="figs"></div>
-  <p class="mut">Every piece is scored on its own and the scores are added, so two pieces hitting one square count twice. Rooks multiply their points by 1.25 and queens by 1.5. Kings score nothing themselves, but the squares around a king are worth more.</p>
+  <p class="mut">Every piece is scored on its own and the scores are added, so two pieces hitting one square count twice. Kings score nothing themselves, but the squares around a king are worth more.</p>
   <p><b>A</b> = White Attack + Black Attack. <b>T</b> = A − |White Attack − Black Attack|, which equals 2 × the smaller side’s attack. Like a rope pulled from both ends, tension is limited by the weaker pull.</p>
 </div>
 <div class="grid">
 <div>
+  <div class="row" style="margin-top:0"><button class="btn" id="prev2">◀ Back</button><button class="btn" id="next2">Next ▶</button></div>
   <div id="board" class="board"></div>
   <div class="pal" id="pal"></div>
   <div class="row">
+    <button class="btn" id="play">Play</button>
+    <button class="btn" id="undo" hidden>Undo</button>
     <button class="btn" id="start">Start</button>
     <button class="btn" id="clear">Clear</button>
     <button class="btn" id="flip">Flip</button>
   </div>
+  <div id="status"></div>
 </div>
 <div>
   <div class="card stats">
@@ -213,7 +248,9 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--ac); }
       </div>
       <div class="mut" id="plyLabel"></div>
       <svg id="graph" viewBox="0 0 300 112" role="img" aria-label="Attack and tension over the game"></svg>
-      <div class="mut">Teal: Tension (T). Grey: Attack (A). Click the graph to jump.</div>
+      <div class="mut">Teal: Tension (T). Grey: Attack (A). Click a graph to jump.</div>
+      <svg id="graph2" viewBox="0 0 300 112" role="img" aria-label="White attack and Black attack over the game"></svg>
+      <div class="mut">Orange: White attack. Blue: Black attack.</div>
     </div>
   </div>
   <div class="card">
@@ -231,6 +268,13 @@ const G={K:"♚",Q:"♛",R:"♜",B:"♝",N:"♞",P:"♟"};
 const ok=(f,r)=>f>=0&&f<8&&r>=0&&r<8, up=p=>p===p.toUpperCase();
 const rnd=x=>Math.floor(x+0.5), sqn=(f,r)=>"abcdefgh"[f]+(r+1);
 
+/* Lichess piece set (cburnett). Put the lila folder public/piece/cburnett next to this file as pieces/cburnett/ (wK.svg, bQ.svg ...). Missing images fall back to the Unicode glyph. */
+const PD="pieces/cburnett/";
+const pn=p=>(up(p)?"w":"b")+p.toUpperCase();
+const pcs=p=>`<img class="pc" src="${PD}${pn(p)}.svg" alt="" draggable="false" data-p="${p}" onerror="pcFail(this)">`;
+function pcFail(im){const p=im.dataset.p,s=document.createElement("span");s.className=up(p)?"pw":"pb";s.textContent=G[p.toUpperCase()]+"\uFE0E";im.replaceWith(s)}
+
+let meta=" w KQkq - 0 1";
 function parseFen(fen){
   const rows=fen.trim().split(/\s+/)[0].split("/");
   if(rows.length!==8)throw 0;
@@ -241,7 +285,7 @@ function parseFen(fen){
 function toFen(b){
   let rows=[];
   for(let r=7;r>=0;r--){let s="",e=0;for(let f=0;f<8;f++){const p=b[f+","+r];if(!p)e++;else{if(e)s+=e;e=0;s+=p}}if(e)s+=e;rows.push(s)}
-  return rows.join("/")+" w - - 0 1";
+  return rows.join("/")+meta;
 }
 function seen(b,f,r,p){
   const w=up(p),k=p.toUpperCase(),o=[];
@@ -279,8 +323,6 @@ function score(b){
       if(occ&&occ.toUpperCase()==="Q"&&up(occ)!==w)m*=2;
       pts+=m;list.push(tf+","+tr);
     }
-    const ek=eff.toUpperCase();
-    pts*=ek==="R"?1.25:ek==="Q"?1.5:1;
     const total=pts+extra;
     tot[w?"w":"b"]+=total;
     rows.push({p,f,r,total,w,list});
@@ -290,23 +332,35 @@ function score(b){
 }
 
 let board=parseFen(START),sel=null,hi=new Set(),hiKey=null,flip=false,game=null,ply=0;
+let play=false,chessG=null,selSq=null,moves=[],last=null;
 const $=id=>document.getElementById(id);
 const pal=$("pal");
-["KQRBNP","kqrbnp"].forEach(set=>{for(const c of set){const bt=document.createElement("button");bt.dataset.p=c;bt.innerHTML=`<span class="${up(c)?"pw":"pb"}">${G[c.toUpperCase()]}\uFE0E</span>`;bt.style.background="var(--card)";pal.appendChild(bt)}});
+["KQRBNP","kqrbnp"].forEach(set=>{for(const c of set){const bt=document.createElement("button");bt.dataset.p=c;bt.innerHTML=pcs(c);bt.style.background="var(--card)";pal.appendChild(bt)}});
 const er=document.createElement("button");er.dataset.p="x";er.textContent="⌫";er.title="Erase";pal.appendChild(er);
 pal.onclick=e=>{const bt=e.target.closest("button");if(!bt)return;sel=sel===bt.dataset.p?null:bt.dataset.p;[...pal.children].forEach(c=>c.classList.toggle("on",c.dataset.p===sel))};
+
+const curFen=()=>play?chessG.fen():toFen(board);
+function status(){
+  if(!play)return "";
+  const t=chessG.turn()==="w"?"White":"Black";
+  if(chessG.in_checkmate())return `Checkmate. ${t==="White"?"Black":"White"} wins.`;
+  if(chessG.in_draw())return "Draw.";
+  return t+" to move"+(chessG.in_check()?" (check)":"");
+}
+function exitPlay(){play=false;selSq=null;moves=[];last=null}
 
 function render(){
   const res=score(board);
   $("w").textContent=res.W;$("b").textContent=res.B;$("a").textContent=res.A;$("t").textContent=res.T;
-  $("fen").value=toFen(board);
+  $("fen").value=curFen();
+  $("pal").hidden=play;$("undo").hidden=!play;$("play").textContent=play?"Stop":"Play";$("status").textContent=status();
   const bd=$("board");bd.innerHTML="";
   for(let i=0;i<8;i++)for(let j=0;j<8;j++){
-    const r=flip?i:7-i,f=flip?7-j:j,k=f+","+r,p=board[k];
+    const r=flip?i:7-i,f=flip?7-j:j,k=f+","+r,p=board[k],nm=sqn(f,r),mt=moves.find(m=>m.to===nm);
     const d=document.createElement("div");
-    d.className="sq "+((f+r)%2===0?"d":"l")+(hi.has(k)?" hi":"");
+    d.className="sq "+((f+r)%2===0?"d":"l")+(hi.has(k)?" hi":"")+(selSq===nm?" sel":"")+(last&&(last[0]===nm||last[1]===nm)?" last":"")+(mt?(/[ce]/.test(mt.flags)?" tgc":" tg"):"");
     d.dataset.k=k;
-    if(p)d.innerHTML=`<span class="${up(p)?"pw":"pb"}">${G[p.toUpperCase()]}\uFE0E</span>`;
+    if(p)d.innerHTML=pcs(p);
     if(j===0||i===7){const c=document.createElement("span");c.className="coord";c.textContent=(j===0?(r+1):"")+(i===7?"abcdefgh"[f]:"");d.appendChild(c)}
     bd.appendChild(d);
   }
@@ -314,39 +368,85 @@ function render(){
   res.rows.filter(x=>x.total>0).sort((x,y)=>y.total-x.total).forEach(x=>{
     const key=x.f+","+x.r,d=document.createElement("div");
     d.className=hiKey===key?"on":"";
-    d.innerHTML=`<span class="${x.w?"pw":"pb"}" style="font-size:18px">${G[x.p.toUpperCase()]}\uFE0E</span><span>${x.w?"White":"Black"} ${sqn(x.f,x.r)}</span><span class="n">${+x.total.toFixed(2)}</span>`;
+    d.innerHTML=`<span class="lp">${pcs(x.p)}</span><span>${x.w?"White":"Black"} ${sqn(x.f,x.r)}</span><span class="n">${+x.total.toFixed(2)}</span>`;
     d.onclick=()=>{if(hiKey===key){hiKey=null;hi=new Set()}else{hiKey=key;hi=new Set(x.list)}render()};
     L.appendChild(d);
   });
   if(!res.rows.some(x=>x.total>0))L.innerHTML='<div class="mut">No piece is scoring.</div>';
 }
+function playClick(k){
+  if(chessG.game_over())return;
+  const[f,r]=k.split(",").map(Number),sq=sqn(f,r),mv=selSq&&moves.find(m=>m.to===sq);
+  if(mv){
+    const m=chessG.move({from:selSq,to:sq,promotion:"q"});
+    last=[m.from,m.to];selSq=null;moves=[];board=parseFen(chessG.fen());hi=new Set();hiKey=null;game.fens.push(chessG.fen());game.sans.push(m.san);game.res.push(score(board));render();syncPlay();return;
+  }
+  const p=board[k];
+  if(p&&(up(p)?"w":"b")===chessG.turn()){selSq=sq;moves=chessG.moves({square:sq,verbose:true})}
+  else{selSq=null;moves=[]}
+  render();
+}
 $("board").onclick=e=>{
   const s=e.target.closest(".sq");if(!s)return;
-  if(sel){if(sel==="x")delete board[s.dataset.k];else board[s.dataset.k]=sel;hi=new Set();hiKey=null;render()}
+  if(play){playClick(s.dataset.k);return}
+  if(sel){
+    if(sel==="x")delete board[s.dataset.k];else board[s.dataset.k]=sel;
+    meta=" "+(meta.trim().split(/\s+/)[0]||"w")+" - - 0 1";
+    hi=new Set();hiKey=null;render();
+  }
 };
-$("start").onclick=()=>{board=parseFen(START);hi=new Set();hiKey=null;render()};
-$("clear").onclick=()=>{board={};hi=new Set();hiKey=null;render()};
+$("play").onclick=()=>{
+  if(play){exitPlay();$("msg").textContent="";render();return}
+  const c=new Chess();
+  if(!c.load(toFen(board))){$("msg").textContent="Can't play this position: it needs one king per side and a legal setup.";return}
+  chessG=c;play=true;sel=null;[...pal.children].forEach(x=>x.classList.remove("on"));
+  selSq=null;moves=[];last=null;hi=new Set();hiKey=null;$("msg").textContent="";
+  game={fens:[chessG.fen()],sans:[],res:[score(board)]};render();syncPlay();
+};
+$("undo").onclick=()=>{if(!play||!chessG.undo())return;game.fens.pop();game.sans.pop();game.res.pop();last=null;selSq=null;moves=[];board=parseFen(chessG.fen());render();syncPlay()};
+$("start").onclick=()=>{exitPlay();meta=" w KQkq - 0 1";board=parseFen(START);hi=new Set();hiKey=null;render()};
+$("clear").onclick=()=>{exitPlay();meta=" w - - 0 1";board={};hi=new Set();hiKey=null;render()};
 $("flip").onclick=()=>{flip=!flip;render()};
-$("loadFen").onclick=()=>{try{board=parseFen($("fen").value);hi=new Set();hiKey=null;$("msg").textContent="";render()}catch(e){$("msg").textContent="That FEN could not be read."}};
-$("copyFen").onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(toFen(board)).then(()=>$("msg").textContent="Copied.",()=>{})};
+$("loadFen").onclick=()=>{
+  try{
+    const p=$("fen").value.trim().split(/\s+/);
+    const nb=parseFen($("fen").value);
+    exitPlay();board=nb;meta=` ${p[1]==="b"?"b":"w"} ${p[2]||"-"} ${p[3]||"-"} ${p[4]||0} ${p[5]||1}`;
+    hi=new Set();hiKey=null;$("msg").textContent="";render();
+  }catch(e){$("msg").textContent="That FEN could not be read."}
+};
+$("copyFen").onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(curFen()).then(()=>$("msg").textContent="Copied.",()=>{})};
 
+function setLabel(){
+  $("plyLabel").textContent=ply===0?"Start of game":`Move ${Math.ceil(ply/2)}${ply%2?"":"…"} ${game.sans[ply-1]}  —  W ${game.res[ply].W}, B ${game.res[ply].B}, A ${game.res[ply].A}, T ${game.res[ply].T}`;
+}
+function syncPlay(){
+  ply=game.fens.length-1;
+  $("nav").hidden=false;$("slider").max=ply;$("slider").value=ply;
+  $("pgn").value=chessG.pgn();
+  setLabel();drawGraph();
+}
 function showPly(i){
+  exitPlay();
   ply=Math.max(0,Math.min(game.fens.length-1,i));
-  board=parseFen(game.fens[ply]);hi=new Set();hiKey=null;
+  board=parseFen(game.fens[ply]);meta=" "+game.fens[ply].split(" ").slice(1).join(" ");hi=new Set();hiKey=null;
   $("slider").value=ply;
-  $("plyLabel").textContent=ply===0?"Start of game":`Move ${Math.ceil(ply/2)}${ply%2?"":"…"} ${game.sans[ply-1]}  —  A ${game.res[ply].A}, T ${game.res[ply].T}`;
-  drawGraph();render();
+  setLabel();drawGraph();render();
 }
 function drawGraph(){
-  const n=game.res.length,mx=Math.max(1,...game.res.map(x=>x.A)),X=i=>n>1?34+i*258/(n-1):160,Y=v=>80-v*70/mx;
+  chart($("graph"),[["A","#8290a5"],["T","#56d6c2"]]);
+  chart($("graph2"),[["W","#f59e42"],["B","#4a9eff"]]);
+}
+function chart(el,ser){
+  const n=game.res.length,mx=Math.max(1,...game.res.flatMap(x=>ser.map(q=>x[q[0]]))),X=i=>n>1?34+i*258/(n-1):160,Y=v=>80-v*70/mx;
   const line=(k,c)=>`<polyline fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${game.res.map((x,i)=>X(i).toFixed(1)+","+Y(x[k]).toFixed(1)).join(" ")}"/>`;
   const gl=[0,Math.round(mx/2),mx].map(v=>`<line x1="34" x2="292" y1="${Y(v)}" y2="${Y(v)}" stroke="currentColor" opacity=".15"/><text x="30" y="${Y(v)+3}" text-anchor="end" font-size="8" fill="currentColor">${v}</text>`).join("");
   const st=2*Math.max(1,Math.ceil(n/16));let xt="";
   for(let i=0;i<n;i+=st)xt+=`<line x1="${X(i)}" x2="${X(i)}" y1="80" y2="83" stroke="currentColor" opacity=".5"/><text x="${X(i)}" y="92" text-anchor="middle" font-size="8" fill="currentColor">${i/2}</text>`;
   const cur=game.res[ply];
-  $("graph").innerHTML=gl+xt+`<text x="165" y="108" text-anchor="middle" font-size="8" fill="currentColor">move</text><text transform="rotate(-90)" x="-45" y="9" text-anchor="middle" font-size="8" fill="currentColor">points</text>${line("A","#8290a5")}${line("T","#56d6c2")}<line x1="${X(ply)}" x2="${X(ply)}" y1="10" y2="80" stroke="#f3c969" stroke-width="1.5"/><circle cx="${X(ply)}" cy="${Y(cur.T)}" r="3.5" fill="#56d6c2"/><circle cx="${X(ply)}" cy="${Y(cur.A)}" r="3" fill="#8290a5"/>`;
+  el.innerHTML=gl+xt+`<text x="165" y="108" text-anchor="middle" font-size="8" fill="currentColor">move</text><text transform="rotate(-90)" x="-45" y="9" text-anchor="middle" font-size="8" fill="currentColor">points</text>`+ser.map(q=>line(q[0],q[1])).join("")+`<line x1="${X(ply)}" x2="${X(ply)}" y1="10" y2="80" stroke="#f3c969" stroke-width="1.5"/>`+ser.map(q=>`<circle cx="${X(ply)}" cy="${Y(cur[q[0]])}" r="3.5" fill="${q[1]}"/>`).join("");
 }
-$("graph").onclick=e=>{if(!game)return;const rc=e.currentTarget.getBoundingClientRect(),x=(e.clientX-rc.left)/rc.width*300,n=game.res.length;showPly(Math.round((x-34)/258*(n-1)))};
+["graph","graph2"].forEach(id=>{$(id).onclick=e=>{if(!game)return;const rc=e.currentTarget.getBoundingClientRect(),x=(e.clientX-rc.left)/rc.width*300,n=game.res.length;showPly(Math.round((x-34)/258*(n-1)))}});
 $("loadPgn").onclick=()=>{
   const c=new Chess();
   if(!c.load_pgn($("pgn").value,{sloppy:true})||!c.history().length){$("msg").textContent="That PGN could not be read.";return}
@@ -355,8 +455,8 @@ $("loadPgn").onclick=()=>{
   game={fens,sans:mv,res:fens.map(f=>score(parseFen(f)))};
   $("nav").hidden=false;$("slider").max=fens.length-1;$("msg").textContent="";showPly(0);
 };
-$("prev").onclick=()=>game&&showPly(ply-1);
-$("next").onclick=()=>game&&showPly(ply+1);
+$("prev").onclick=$("prev2").onclick=()=>game&&showPly(ply-1);
+$("next").onclick=$("next2").onclick=()=>game&&showPly(ply+1);
 $("slider").oninput=e=>showPly(+e.target.value);
 document.addEventListener("keydown",e=>{if(!game||/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type!=="range")return;if(e.key==="ArrowLeft")showPly(ply-1);if(e.key==="ArrowRight")showPly(ply+1)});
 
